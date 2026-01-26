@@ -114,7 +114,7 @@ pub struct BundleResult {
     pub invalid_count: u32,
     /// Validation results for each transaction
     pub validation_results: Vec<ValidationResult>,
-    /// Whether the bundle can be created
+    /// Whether the bundle can be created (all transactions valid)
     pub can_bundle: bool,
     /// Total volume of valid transactions
     pub total_volume: i128,
