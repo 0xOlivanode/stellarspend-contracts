@@ -7,14 +7,18 @@ members = [
     "contracts/batch-transfer",
     "contracts/batch-conversion",
     "contracts/batch-rewards",
+    "contracts/batch-payment",
+    "contracts/batch-wallet-creation",
     "contracts/budget-recommendations",
     "contracts/shared-budgets",
     "contracts/multi-currency-wallet",
     "contracts/spending-limits",
     "contracts/savings-goals",
+    "contracts/batch-history",
+    "contracts/batch-notifications",
     "contracts/escrow",
     "contracts/budget-allocation",
-
+    "contracts/batch-token-mint",
 ]
 
 [workspace.package]
