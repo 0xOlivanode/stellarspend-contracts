@@ -22,6 +22,7 @@
 mod analytics;
 mod types;
 mod validation;
+mod fees;
 
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, Env, Vec};
 
@@ -46,6 +47,13 @@ pub use crate::validation::{
     validate_transaction_status_update, validate_transaction_status_updates, validate_bundled_transaction,
     validate_bundled_transactions, validate_user_address, validate_year_month, validate_percentage_basis_points,
     validate_different_addresses, validate_asset_type, validate_asset_amount, validate_asset_amounts,
+};
+pub use crate::fees::{
+    calculate_transaction_fee, calculate_batch_fees, validate_fee_config, store_fee_config,
+    get_current_fee_config, deduct_fees, update_fee_config,
+};
+pub use crate::types::{
+    FeeModel, FeeTier, FeeConfig, FeeCalculationResult, FeeDeductionEvent,
 };
 
 /// Error codes for the analytics contract.
@@ -877,6 +885,88 @@ impl TransactionAnalyticsContract {
             .instance()
             .get(&DataKey::LastAnalyticsUpdate)
             .unwrap_or(0)
+    }
+
+    /// Updates the fee configuration.
+    /// 
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `admin` - The admin address (must be authorized)
+    /// * `new_config` - The new fee configuration
+    pub fn update_fee_config(env: Env, admin: Address, new_config: FeeConfig) {
+        admin.require_auth();
+        Self::require_admin(&env, &admin);
+        
+        // Validate the new configuration
+        if let Err(validation_error) = validate_fee_config(&new_config) {
+            match validation_error {
+                ValidationError::InvalidPercentage => panic_with_error!(&env, AnalyticsError::InvalidBatch),
+                ValidationError::InvalidAmount => panic_with_error!(&env, AnalyticsError::InvalidAmount),
+                _ => panic_with_error!(&env, AnalyticsError::InvalidBatch),
+            }
+        }
+        
+        // Store the new configuration
+        store_fee_config(&env, &new_config).expect("Failed to store fee configuration");
+    }
+
+    /// Gets the current fee configuration.
+    /// 
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// 
+    /// # Returns
+    /// * `Option<FeeConfig>` - The current fee configuration if set
+    pub fn get_current_fee_config(env: Env) -> Option<FeeConfig> {
+        get_current_fee_config(&env)
+    }
+
+    /// Calculates fees for a single transaction.
+    /// 
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `amount` - The transaction amount
+    /// 
+    /// # Returns
+    /// * `FeeCalculationResult` - The fee calculation result
+    pub fn calculate_transaction_fee(env: Env, amount: i128) -> FeeCalculationResult {
+        let config = get_current_fee_config(&env)
+            .unwrap_or_else(|| {
+                // Return a default fee configuration if none is set
+                FeeConfig {
+                    fee_model: FeeModel::Percentage(10), // 0.1% default
+                    min_fee: Some(1),
+                    max_fee: None,
+                    enabled: true,
+                    description: Some(Symbol::new(&env, "Default")),
+                }
+            });
+        
+        calculate_transaction_fee(&env, amount, &config)
+    }
+
+    /// Calculates fees for a batch of transactions.
+    /// 
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `amounts` - Vector of transaction amounts
+    /// 
+    /// # Returns
+    /// * `Vec<FeeCalculationResult>` - Vector of fee calculation results
+    pub fn calculate_batch_fees(env: Env, amounts: Vec<i128>) -> Vec<FeeCalculationResult> {
+        let config = get_current_fee_config(&env)
+            .unwrap_or_else(|| {
+                // Return a default fee configuration if none is set
+                FeeConfig {
+                    fee_model: FeeModel::Percentage(10), // 0.1% default
+                    min_fee: Some(1),
+                    max_fee: None,
+                    enabled: true,
+                    description: Some(Symbol::new(&env, "Default")),
+                }
+            });
+        
+        calculate_batch_fees(&env, &amounts.into_iter().collect::<Vec<_>>(), &config)
     }
 
     // Internal helper to verify admin

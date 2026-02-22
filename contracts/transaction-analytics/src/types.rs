@@ -225,6 +225,8 @@ pub enum DataKey {
     TotalTrackedUsers,
     /// Analytics update timestamp
     LastAnalyticsUpdate,
+    /// Current fee configuration
+    CurrentFeeConfig,
 }
 
 /// Status indicating refund eligibility for a transaction.
@@ -277,6 +279,76 @@ pub enum ValidationError {
     BatchTooLarge,
     /// Duplicate transaction ID in batch
     DuplicateTransactionId,
+}
+
+/// Fee calculation models
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub enum FeeModel {
+    /// Flat fee amount
+    Flat(i128),
+    /// Percentage of transaction amount (in basis points)
+    Percentage(u32),
+    /// Tiered fee structure based on amount thresholds
+    Tiered(Vec<FeeTier>),
+}
+
+/// Fee tier definition
+#[derive(Clone, Debug, Default)]
+#[contracttype]
+pub struct FeeTier {
+    /// Amount threshold for this tier
+    pub threshold: i128,
+    /// Fee model for this tier
+    pub fee_model: FeeModel,
+    /// Default percentage in basis points (for fallback calculations)
+    pub default_percentage_bps: u32,
+}
+
+/// Fee configuration structure
+#[derive(Clone, Debug, Default)]
+#[contracttype]
+pub struct FeeConfig {
+    /// The fee model to use
+    pub fee_model: FeeModel,
+    /// Minimum fee amount (optional)
+    pub min_fee: Option<u64>,
+    /// Maximum fee amount (optional)
+    pub max_fee: Option<u64>,
+    /// Whether fees are currently enabled
+    pub enabled: bool,
+    /// Description of the fee configuration
+    pub description: Option<Symbol>,
+}
+
+/// Result of a fee calculation
+#[derive(Clone, Debug, Default)]
+#[contracttype]
+pub struct FeeCalculationResult {
+    /// Original transaction amount
+    pub gross_amount: i128,
+    /// Calculated fee amount
+    pub fee_amount: i128,
+    /// Net amount after fee deduction
+    pub net_amount: i128,
+    /// Effective fee rate in basis points
+    pub fee_percentage_bps: u32,
+}
+
+/// Event structure for fee deductions
+#[derive(Clone, Debug, Default)]
+#[contracttype]
+pub struct FeeDeductionEvent {
+    /// Timestamp of the deduction
+    pub timestamp: u64,
+    /// Gross transaction amount
+    pub gross_amount: i128,
+    /// Fee amount deducted
+    pub fee_amount: i128,
+    /// Net amount after fee
+    pub net_amount: i128,
+    /// Fee percentage in basis points
+    pub fee_percentage_bps: u32,
 }
 
 /// Request structure for a single transaction refund.
@@ -495,5 +567,17 @@ impl AnalyticsEvents {
     ) {
         let topics = (symbol_short!("analytics"), symbol_short!("updated"), user);
         env.events().publish(topics, (year, month, analytics.total_spending, analytics.transaction_count));
+    }
+    
+    /// Event emitted when a fee is deducted from a transaction.
+    pub fn fee_deducted(
+        env: &Env,
+        gross_amount: i128,
+        fee_amount: i128,
+        net_amount: i128,
+        fee_percentage_bps: u32,
+    ) {
+        let topics = (symbol_short!("fee"), symbol_short!("deducted"));
+        env.events().publish(topics, (gross_amount, fee_amount, net_amount, fee_percentage_bps));
     }
 }
